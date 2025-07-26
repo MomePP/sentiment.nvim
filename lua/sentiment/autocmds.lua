@@ -7,8 +7,10 @@ local timer = nil
 
 ---Close `timer` safely.
 local function close_timer()
-  if timer == nil or not timer:is_active() then return end
+  if timer == nil or timer:is_closing() then return end
+  timer:stop()
   timer:close()
+  timer = nil
 end
 
 local renderer = Autocmd.new({

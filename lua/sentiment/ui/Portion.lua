@@ -19,10 +19,13 @@ function Portion.new(win, limit)
   instance.cursor = vim.api.nvim_win_get_cursor(win)
   instance.cursor[2] = instance.cursor[2] + 1
 
+  -- Use modern window info API instead of vim.fn.line
+  local wininfo = vim.fn.getwininfo(win)[1]
   instance.viewport = {
-    vim.fn.line("w0", win),
-    vim.fn.line("w$", win),
+    wininfo.topline,
+    wininfo.botline,
   }
+  
   if instance.cursor[1] - instance:get_top() > limit then
     instance.viewport[1] = instance.cursor[1] - limit
   end

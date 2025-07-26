@@ -31,31 +31,25 @@ function Pair.new(left, right)
   return instance
 end
 
----Highlight opening and closing characters.
+---Highlight opening and closing characters using modern extmarks.
 ---
 ---@param buf buffer Buffer to be drawn in.
 ---@param ns namespace Namespace to be drawn in.
 function Pair:draw(buf, ns)
   if self.left ~= nil then
-    vim.api.nvim_buf_add_highlight(
-      buf,
-      ns,
-      "MatchParen",
-      self.left[1] - 1,
-      self.left[2] - 1,
-      self.left[2]
-    )
+    vim.api.nvim_buf_set_extmark(buf, ns, self.left[1] - 1, self.left[2] - 1, {
+      end_col = self.left[2],
+      hl_group = "MatchParen",
+      ephemeral = true,
+    })
   end
 
   if self.right ~= nil then
-    vim.api.nvim_buf_add_highlight(
-      buf,
-      ns,
-      "MatchParen",
-      self.right[1] - 1,
-      self.right[2] - 1,
-      self.right[2]
-    )
+    vim.api.nvim_buf_set_extmark(buf, ns, self.right[1] - 1, self.right[2] - 1, {
+      end_col = self.right[2],
+      hl_group = "MatchParen",
+      ephemeral = true,
+    })
   end
 end
 

@@ -2,7 +2,6 @@ local config = require("sentiment.config")
 local Portion = require("sentiment.ui.Portion")
 local Pair = require("sentiment.ui.Pair")
 
-local VARIABLE_VIEWPORT = "sentiment.viewport"
 local NAMESPACE_PAIR = "sentiment.pair"
 
 local M = {}
@@ -90,20 +89,16 @@ local function find_pair(portion)
   return pair
 end
 
----Clear `Pair` highlights.
+---Clear `Pair` highlights using modern extmarks.
 ---
 ---@param buf? buffer Buffer to be cleared.
 function M.clear(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-
   local ns = vim.api.nvim_create_namespace(NAMESPACE_PAIR)
-  local ok, viewport = pcall(vim.api.nvim_buf_get_var, buf, VARIABLE_VIEWPORT)
-  if not ok then return end
-
-  vim.api.nvim_buf_clear_namespace(buf, ns, viewport[1] - 1, viewport[2])
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 end
 
----Calculate and draw the found `Pair`.
+---Calculate and draw the found `Pair` using modern timer API.
 ---
 ---@async
 ---@param win? window Window to be rendered inside.
@@ -121,27 +116,35 @@ function M.render(win)
 
   local prev_cursor = vim.api.nvim_win_get_cursor(win)
   prev_cursor[2] = prev_cursor[2] + 1
-  return vim.defer_fn(function()
+  
+  -- Use modern libuv timer API for better performance
+  local uv_timer = vim.uv.new_timer()
+  uv_timer:start(config.get_delay(), 0, function()
     if
       not vim.api.nvim_win_is_valid(win)
       or not vim.api.nvim_buf_is_valid(buf)
     then
+      uv_timer:stop()
+      uv_timer:close()
       return
     end
 
     local portion = Portion.new(win, config.get_limit())
     local cursor = portion:get_cursor()
-    if not vim.deep_equal(cursor, prev_cursor) then return end
+    if not vim.deep_equal(cursor, prev_cursor) then 
+      uv_timer:stop()
+      uv_timer:close()
+      return 
+    end
 
     M.clear(buf)
-    vim.api.nvim_buf_set_var(
-      buf,
-      VARIABLE_VIEWPORT,
-      { portion:get_top(), portion:get_bottom() }
-    )
-
     find_pair(portion):draw(buf, vim.api.nvim_create_namespace(NAMESPACE_PAIR))
-  end, config.get_delay())
+    
+    uv_timer:stop()
+    uv_timer:close()
+  end)
+  
+  return uv_timer
 end
 
 return M
