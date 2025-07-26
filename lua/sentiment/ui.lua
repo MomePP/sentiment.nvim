@@ -115,7 +115,7 @@ function M.clear(buf)
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 end
 
----Calculate and draw the found `Pair` using modern timer API.
+---Calculate and draw the found `Pair` using defer_fn to avoid fast event issues.
 ---
 ---@async
 ---@param win? window Window to be rendered inside.
@@ -142,38 +142,25 @@ function M.render(win)
   local prev_cursor = vim.api.nvim_win_get_cursor(win)
   prev_cursor[2] = prev_cursor[2] + 1
 
-  -- Use modern libuv timer API for better performance
-  local uv_timer = vim.uv.new_timer()
-  uv_timer:start(config.get_delay(), 0, function()
-    -- Schedule to avoid fast event context issues
-    vim.schedule(function()
-      -- Double-check validity after delay
-      if
-        not vim.api.nvim_win_is_valid(win)
-        or not vim.api.nvim_buf_is_valid(buf)
-      then
-        uv_timer:stop()
-        uv_timer:close()
-        return
-      end
+  -- Use vim.defer_fn for better fast event compatibility
+  return vim.defer_fn(function()
+    -- Double-check validity after delay
+    if
+      not vim.api.nvim_win_is_valid(win)
+      or not vim.api.nvim_buf_is_valid(buf)
+    then
+      return
+    end
 
-      local portion = Portion.new(win, config.get_limit())
-      local cursor = portion:get_cursor()
-      if not vim.deep_equal(cursor, prev_cursor) then
-        uv_timer:stop()
-        uv_timer:close()
-        return
-      end
+    local portion = Portion.new(win, config.get_limit())
+    local cursor = portion:get_cursor()
+    if not vim.deep_equal(cursor, prev_cursor) then
+      return
+    end
 
-      M.clear(buf)
-      find_pair(portion):draw(buf, get_namespace_id())
-
-      uv_timer:stop()
-      uv_timer:close()
-    end)
-  end)
-
-  return uv_timer
+    M.clear(buf)
+    find_pair(portion):draw(buf, get_namespace_id())
+  end, config.get_delay())
 end
 
 return M
