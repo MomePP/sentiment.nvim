@@ -3,8 +3,19 @@ local Portion = require("sentiment.ui.Portion")
 local Pair = require("sentiment.ui.Pair")
 
 local NAMESPACE_PAIR = "sentiment.pair"
+-- Cache namespace ID for better performance
+local cached_namespace_id = nil
 
 local M = {}
+
+---Get or create cached namespace ID
+---@return integer
+local function get_namespace_id()
+  if cached_namespace_id == nil then
+    cached_namespace_id = vim.api.nvim_create_namespace(NAMESPACE_PAIR)
+  end
+  return cached_namespace_id
+end
 
 ---Find a side of a pair.
 ---
@@ -55,7 +66,7 @@ local function find_other_side(portion, left, right, reversed)
   return nil
 end
 
----Find both sides of a pair.
+---Find both sides of a pair with optimized logic.
 ---
 ---@param portion Portion `Portion` to look inside of.
 ---@return Pair
@@ -64,8 +75,14 @@ local function find_pair(portion)
   local cursor = portion:get_cursor()
   local pair = Pair.new()
 
+  -- Early exit for empty character
+  if under_cursor == "" or under_cursor == " " or under_cursor == "\t" then
+    return pair
+  end
+
   local right = config.get_right_by_left(under_cursor)
   local left = config.get_left_by_right(under_cursor)
+  
   if right ~= nil then
     pair.left = cursor
     pair.right = find_other_side(portion, under_cursor, right, false)
@@ -94,7 +111,7 @@ end
 ---@param buf? buffer Buffer to be cleared.
 function M.clear(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  local ns = vim.api.nvim_create_namespace(NAMESPACE_PAIR)
+  local ns = get_namespace_id()
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 end
 
@@ -106,6 +123,12 @@ end
 function M.render(win)
   win = win or vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_win_get_buf(win)
+  
+  -- Early validation to avoid unnecessary work
+  if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
+    return
+  end
+  
   if
     not config.is_buffer_included(buf)
     or not config.is_current_mode_included()
@@ -120,6 +143,7 @@ function M.render(win)
   -- Use modern libuv timer API for better performance
   local uv_timer = vim.uv.new_timer()
   uv_timer:start(config.get_delay(), 0, function()
+    -- Double-check validity after delay
     if
       not vim.api.nvim_win_is_valid(win)
       or not vim.api.nvim_buf_is_valid(buf)
@@ -138,7 +162,7 @@ function M.render(win)
     end
 
     M.clear(buf)
-    find_pair(portion):draw(buf, vim.api.nvim_create_namespace(NAMESPACE_PAIR))
+    find_pair(portion):draw(buf, get_namespace_id())
     
     uv_timer:stop()
     uv_timer:close()
