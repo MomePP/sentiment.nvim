@@ -82,7 +82,7 @@ local function find_pair(portion)
 
   local right = config.get_right_by_left(under_cursor)
   local left = config.get_left_by_right(under_cursor)
-  
+
   if right ~= nil then
     pair.left = cursor
     pair.right = find_other_side(portion, under_cursor, right, false)
@@ -123,12 +123,14 @@ end
 function M.render(win)
   win = win or vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_win_get_buf(win)
-  
+
   -- Early validation to avoid unnecessary work
-  if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then
+  if
+    not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf)
+  then
     return
   end
-  
+
   if
     not config.is_buffer_included(buf)
     or not config.is_current_mode_included()
@@ -139,35 +141,38 @@ function M.render(win)
 
   local prev_cursor = vim.api.nvim_win_get_cursor(win)
   prev_cursor[2] = prev_cursor[2] + 1
-  
+
   -- Use modern libuv timer API for better performance
   local uv_timer = vim.uv.new_timer()
   uv_timer:start(config.get_delay(), 0, function()
-    -- Double-check validity after delay
-    if
-      not vim.api.nvim_win_is_valid(win)
-      or not vim.api.nvim_buf_is_valid(buf)
-    then
+    -- Schedule to avoid fast event context issues
+    vim.schedule(function()
+      -- Double-check validity after delay
+      if
+        not vim.api.nvim_win_is_valid(win)
+        or not vim.api.nvim_buf_is_valid(buf)
+      then
+        uv_timer:stop()
+        uv_timer:close()
+        return
+      end
+
+      local portion = Portion.new(win, config.get_limit())
+      local cursor = portion:get_cursor()
+      if not vim.deep_equal(cursor, prev_cursor) then
+        uv_timer:stop()
+        uv_timer:close()
+        return
+      end
+
+      M.clear(buf)
+      find_pair(portion):draw(buf, get_namespace_id())
+
       uv_timer:stop()
       uv_timer:close()
-      return
-    end
-
-    local portion = Portion.new(win, config.get_limit())
-    local cursor = portion:get_cursor()
-    if not vim.deep_equal(cursor, prev_cursor) then 
-      uv_timer:stop()
-      uv_timer:close()
-      return 
-    end
-
-    M.clear(buf)
-    find_pair(portion):draw(buf, get_namespace_id())
-    
-    uv_timer:stop()
-    uv_timer:close()
+    end)
   end)
-  
+
   return uv_timer
 end
 
