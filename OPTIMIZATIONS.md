@@ -1,18 +1,19 @@
 # Sentiment.nvim Performance Optimizations
 
-This document outlines the performance optimizations implemented to modernize sentiment.nvim using current Neovim APIs.
+This document outlines the performance optimizations implemented to modernize sentiment.nvim using current Neovim APIs while maintaining backward compatibility and addressing fast event context requirements.
 
 ## Summary of Optimizations
 
 ### 1. Modern Highlighting API
 - **Before**: `vim.api.nvim_buf_add_highlight()`
-- **After**: `vim.api.nvim_buf_set_extmark()` with ephemeral highlighting
-- **Benefits**: Better memory management, automatic cleanup, modern API
+- **After**: `vim.api.nvim_buf_set_extmark()` 
+- **Benefits**: Modern API usage, better consistency with Neovim's direction
+- **Note**: Ephemeral highlighting was removed as it requires decoration provider callbacks
 
-### 2. Modern Timer System
-- **Before**: `vim.defer_fn()` creating new function contexts
-- **After**: `vim.uv.new_timer()` with proper lifecycle management
-- **Benefits**: Better performance, proper cleanup, libuv integration
+### 2. Improved Timer System
+- **Implementation**: Retained `vim.defer_fn()` for fast event compatibility
+- **Benefits**: Reliable execution in all event contexts, prevents E5560 errors
+- **Note**: `vim.uv.new_timer()` was tested but caused fast event context issues
 
 ### 3. Cached Namespace IDs
 - **Before**: Creating namespace on every render call
@@ -35,39 +36,33 @@ This document outlines the performance optimizations implemented to modernize se
 - **Benefits**: Single API call instead of multiple, better performance
 
 ### 7. Enhanced Event Filtering
-- **Before**: Processing all events equally
-- **After**: Mode-specific early exit for TextChanged events
-- **Benefits**: Reduced unnecessary processing
+- **Implementation**: Mode-specific early exit for TextChanged events
+- **Benefits**: Reduced unnecessary processing when events fire inappropriately
 
-### 8. Optimized Text Processing
-- **Before**: Multiple method calls in iterator
-- **After**: Cached bounds in iterator function
-- **Benefits**: Fewer method calls during iteration
+### 8. Early Validation
+- **Implementation**: Validation before timer creation and after delay
+- **Benefits**: Prevents unnecessary timer creation and processing for invalid states
 
-### 9. Early Validation
-- **Before**: Validation only inside timer callback
-- **After**: Early validation before timer creation and after delay
-- **Benefits**: Prevents unnecessary timer creation and processing
-
-### 10. Character-Level Optimizations
-- **Before**: Processing all characters equally
-- **After**: Early exit for whitespace and empty characters
-- **Benefits**: Reduced processing for non-pair characters
-
-### 11. Improved Memory Management
-- **Before**: Manual namespace range clearing with viewport tracking
-- **After**: Ephemeral extmarks that auto-cleanup
-- **Benefits**: Better memory usage, automatic cleanup
+### 9. Optimized Text Processing
+- **Implementation**: Cached bounds and character-level optimizations
+- **Benefits**: Fewer method calls during iteration, early exits for non-pair characters
 
 ## Performance Impact
 
 The optimizations provide several key improvements:
 
 1. **Reduced API Calls**: Cached namespace IDs and single window info calls
-2. **Better Memory Management**: Ephemeral extmarks eliminate manual cleanup
-3. **Modern Timer API**: Better performance and proper lifecycle management
+2. **Modern API Usage**: Updated to use current Neovim APIs while maintaining compatibility
+3. **Safe Event Handling**: Proper fast event context management prevents runtime errors
 4. **Early Validation**: Prevents unnecessary work in invalid states
 5. **Enhanced Filtering**: Mode-specific processing reduces overhead
+
+## Fast Event Context Considerations
+
+Special attention was paid to Neovim's fast event context requirements:
+- Timer system uses `vim.defer_fn()` for reliable execution in all contexts
+- API calls are validated to work safely with fast events
+- Ephemeral highlighting was removed due to decoration provider requirements
 
 ## Compatibility
 
@@ -80,9 +75,18 @@ All optimizations maintain full backward compatibility with the existing API:
 ## Testing
 
 The optimizations have been validated through:
+- Fast event context compatibility testing
+- API usage verification against Neovim requirements  
 - Performance benchmarking tests
 - Edge case validation
-- API compatibility verification
-- Memory management testing
+- Backward compatibility verification
 
-These changes bring sentiment.nvim up to modern Neovim standards while maintaining full compatibility with existing configurations.
+## Implementation Notes
+
+Key lessons learned during implementation:
+- Ephemeral extmarks require decoration provider callbacks and cannot be used directly
+- Fast event contexts restrict certain API usage patterns
+- Modern APIs provide better performance while maintaining compatibility
+- Proper validation prevents runtime errors in edge cases
+
+These changes bring sentiment.nvim up to modern Neovim standards while maintaining full compatibility with existing configurations and safe operation in all event contexts.
