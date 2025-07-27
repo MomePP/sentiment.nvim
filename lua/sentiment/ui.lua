@@ -2,10 +2,20 @@ local config = require("sentiment.config")
 local Portion = require("sentiment.ui.Portion")
 local Pair = require("sentiment.ui.Pair")
 
-local VARIABLE_VIEWPORT = "sentiment.viewport"
 local NAMESPACE_PAIR = "sentiment.pair"
+-- Cache namespace ID for better performance
+local cached_namespace_id = nil
 
 local M = {}
+
+---Get or create cached namespace ID
+---@return integer
+local function get_namespace_id()
+  if cached_namespace_id == nil then
+    cached_namespace_id = vim.api.nvim_create_namespace(NAMESPACE_PAIR)
+  end
+  return cached_namespace_id
+end
 
 ---Find a side of a pair.
 ---
@@ -56,7 +66,7 @@ local function find_other_side(portion, left, right, reversed)
   return nil
 end
 
----Find both sides of a pair.
+---Find both sides of a pair with optimized logic.
 ---
 ---@param portion Portion `Portion` to look inside of.
 ---@return Pair
@@ -65,8 +75,14 @@ local function find_pair(portion)
   local cursor = portion:get_cursor()
   local pair = Pair.new()
 
+  -- Early exit for empty character
+  if under_cursor == "" or under_cursor == " " or under_cursor == "\t" then
+    return pair
+  end
+
   local right = config.get_right_by_left(under_cursor)
   local left = config.get_left_by_right(under_cursor)
+
   if right ~= nil then
     pair.left = cursor
     pair.right = find_other_side(portion, under_cursor, right, false)
@@ -90,20 +106,16 @@ local function find_pair(portion)
   return pair
 end
 
----Clear `Pair` highlights.
+---Clear `Pair` highlights using modern extmarks.
 ---
 ---@param buf? buffer Buffer to be cleared.
 function M.clear(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-
-  local ns = vim.api.nvim_create_namespace(NAMESPACE_PAIR)
-  local ok, viewport = pcall(vim.api.nvim_buf_get_var, buf, VARIABLE_VIEWPORT)
-  if not ok then return end
-
-  vim.api.nvim_buf_clear_namespace(buf, ns, viewport[1] - 1, viewport[2])
+  local ns = get_namespace_id()
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 end
 
----Calculate and draw the found `Pair`.
+---Calculate and draw the found `Pair` using defer_fn to avoid fast event issues.
 ---
 ---@async
 ---@param win? window Window to be rendered inside.
@@ -111,6 +123,14 @@ end
 function M.render(win)
   win = win or vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_win_get_buf(win)
+
+  -- Early validation to avoid unnecessary work
+  if
+    not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf)
+  then
+    return
+  end
+
   if
     not config.is_buffer_included(buf)
     or not config.is_current_mode_included()
@@ -121,7 +141,10 @@ function M.render(win)
 
   local prev_cursor = vim.api.nvim_win_get_cursor(win)
   prev_cursor[2] = prev_cursor[2] + 1
+
+  -- Use vim.defer_fn for better fast event compatibility
   return vim.defer_fn(function()
+    -- Double-check validity after delay
     if
       not vim.api.nvim_win_is_valid(win)
       or not vim.api.nvim_buf_is_valid(buf)
@@ -131,16 +154,12 @@ function M.render(win)
 
     local portion = Portion.new(win, config.get_limit())
     local cursor = portion:get_cursor()
-    if not vim.deep_equal(cursor, prev_cursor) then return end
+    if not vim.deep_equal(cursor, prev_cursor) then
+      return
+    end
 
     M.clear(buf)
-    vim.api.nvim_buf_set_var(
-      buf,
-      VARIABLE_VIEWPORT,
-      { portion:get_top(), portion:get_bottom() }
-    )
-
-    find_pair(portion):draw(buf, vim.api.nvim_create_namespace(NAMESPACE_PAIR))
+    find_pair(portion):draw(buf, get_namespace_id())
   end, config.get_delay())
 end
 

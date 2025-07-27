@@ -9,6 +9,7 @@ local timer = nil
 local function close_timer()
   if timer == nil or not timer:is_active() then return end
   timer:close()
+  timer = nil
 end
 
 local renderer = Autocmd.new({
@@ -20,8 +21,19 @@ local renderer = Autocmd.new({
     "ModeChanged",
     "CursorMoved",
     "CursorMovedI",
+    "TextChanged",
+    "TextChangedI",
   },
-  callback = function()
+  callback = function(args)
+    -- Early exit for certain events in specific modes
+    local mode = vim.api.nvim_get_mode().mode
+    if args.event == "TextChanged" and mode ~= "n" then
+      return
+    end
+    if args.event == "TextChangedI" and mode ~= "i" then
+      return
+    end
+    
     close_timer()
     timer = ui.render()
   end,

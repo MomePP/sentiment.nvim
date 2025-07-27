@@ -19,10 +19,13 @@ function Portion.new(win, limit)
   instance.cursor = vim.api.nvim_win_get_cursor(win)
   instance.cursor[2] = instance.cursor[2] + 1
 
+  -- Use modern window info API instead of vim.fn.line
+  local wininfo = vim.fn.getwininfo(win)[1]
   instance.viewport = {
-    vim.fn.line("w0", win),
-    vim.fn.line("w$", win),
+    wininfo.topline,
+    wininfo.botline,
   }
+  
   if instance.cursor[1] - instance:get_top() > limit then
     instance.viewport[1] = instance.cursor[1] - limit
   end
@@ -85,19 +88,15 @@ end
 function Portion:iter(reversed)
   local factor = reversed and -1 or 1
   local cursor = self:get_cursor()
+  local top, bottom = self:get_top(), self:get_bottom()
 
   return function()
     local line = self:get_line(cursor[1])
     cursor[2] = cursor[2] + factor
+    
     if utils.ternary(reversed, cursor[2] < 1, cursor[2] > #line) then
       cursor[1] = cursor[1] + factor
-      if
-        utils.ternary(
-          reversed,
-          cursor[1] < self:get_top(),
-          cursor[1] > self:get_bottom()
-        )
-      then
+      if utils.ternary(reversed, cursor[1] < top, cursor[1] > bottom) then
         ---@diagnostic disable-next-line: missing-return-value, return-type-mismatch
         return nil
       end

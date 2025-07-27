@@ -19,13 +19,13 @@ function M.set(c)
   end
 end
 
----Check whether a buffer is included.
+---Check whether a buffer is included using modern buffer options API.
 ---
 ---@param buf buffer Buffer to be checked.
 ---@return boolean
 function M.is_buffer_included(buf)
-  local buftype = vim.bo[buf].buftype
-  local filetype = vim.bo[buf].filetype
+  local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
+  local filetype = vim.api.nvim_get_option_value("filetype", { buf = buf })
 
   return cfg.included_buftypes[buftype] and not cfg.excluded_filetypes[filetype]
 end
@@ -34,7 +34,7 @@ end
 ---
 ---@return boolean
 function M.is_current_mode_included()
-  local mode = vim.fn.mode()
+  local mode = vim.api.nvim_get_mode().mode
   return cfg.included_modes[mode]
 end
 
