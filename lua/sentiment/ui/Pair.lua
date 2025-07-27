@@ -40,7 +40,6 @@ function Pair:draw(buf, ns)
     vim.api.nvim_buf_set_extmark(buf, ns, self.left[1] - 1, self.left[2] - 1, {
       end_col = self.left[2],
       hl_group = "MatchParen",
-      ephemeral = true,
     })
   end
 
@@ -48,7 +47,6 @@ function Pair:draw(buf, ns)
     vim.api.nvim_buf_set_extmark(buf, ns, self.right[1] - 1, self.right[2] - 1, {
       end_col = self.right[2],
       hl_group = "MatchParen",
-      ephemeral = true,
     })
   end
 end
