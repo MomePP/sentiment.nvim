@@ -2,6 +2,7 @@ local config = require("sentiment.config")
 local Portion = require("sentiment.ui.Portion")
 local Pair = require("sentiment.ui.Pair")
 
+local VARIABLE_VIEWPORT = "sentiment.viewport"
 local NAMESPACE_PAIR = "sentiment.pair"
 -- Cache namespace ID for better performance
 local cached_namespace_id = nil
@@ -111,8 +112,12 @@ end
 ---@param buf? buffer Buffer to be cleared.
 function M.clear(buf)
   buf = buf or vim.api.nvim_get_current_buf()
+
+  local ok, viewport = pcall(vim.api.nvim_buf_get_var, buf, VARIABLE_VIEWPORT)
+  if not ok then return end
+
   local ns = get_namespace_id()
-  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(buf, ns, viewport[1] - 1, viewport[2])
 end
 
 ---Calculate and draw the found `Pair` using defer_fn to avoid fast event issues.
@@ -154,11 +159,14 @@ function M.render(win)
 
     local portion = Portion.new(win, config.get_limit())
     local cursor = portion:get_cursor()
-    if not vim.deep_equal(cursor, prev_cursor) then
-      return
-    end
+    if not vim.deep_equal(cursor, prev_cursor) then return end
 
     M.clear(buf)
+    vim.api.nvim_buf_set_var(
+      buf,
+      VARIABLE_VIEWPORT,
+      { portion:get_top(), portion:get_bottom() }
+    )
     find_pair(portion):draw(buf, get_namespace_id())
   end, config.get_delay())
 end
